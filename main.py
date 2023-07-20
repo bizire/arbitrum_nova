@@ -4,6 +4,7 @@ import json as js
 import random
 import time
 import threading
+from termcolor import cprint
 
 # Option
 number_of_threads = 1
@@ -16,6 +17,9 @@ time_delay_max = 60  # Максимальная задержка между ак
 
 gas = 400000
 RPC = "https://nova.arbitrum.io/rpc"
+
+nova_maxPriorityFeePerGas = 0
+nova_maxFeePerGas = Web3.to_wei('0.0135', 'gwei')
 # --------------------------------------
 
 
@@ -53,33 +57,34 @@ def swap_slingshot(private_key, token_to_buy, token_to_sold, amount, symbol, ret
     account = web3.eth.account.from_key(private_key)
     address_wallet = account.address
     url = 'https://slingshot.finance/api/v3/trade/'
-    if token_to_sold == Router.eth:
-        token_to_sold = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
-        amount_ = str(int(amount * 1000000000000000000))
-    else:
-        token_sold = web3.eth.contract(address=token_to_sold, abi=Router.abi_token)
-        token_balance = Web3.from_wei(token_sold.functions.balanceOf(address_wallet).call(), 'ether')
-        token_to_buy = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
-        amount_ = str(int(token_balance * 1000000000000000000))
-    json = {
-        'from': token_to_sold,
-        'fromAmount': amount_,
-        'gasOptimized': True,
-        'limit': '99',
-        'recipient': address_wallet,
-        'source': 'web',
-        'threeHop': True,
-        'to': token_to_buy,
-        '_unsafe': False
-    }
-    headers = {
-        'accept': '*/*',
-        'liquidityzone': 'nova',
-        'origin': 'https://app.slingshot.finance',
-        'referer': 'https://app.slingshot.finance/',
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36'
-    }
     try:
+        if token_to_sold == Router.eth:
+            token_to_sold = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+            amount_ = str(int(amount * 1000000000000000000))
+        else:
+            token_sold = web3.eth.contract(address=Web3.to_checksum_address(token_to_sold), abi=Router.abi_token)
+            token_balance = Web3.from_wei(token_sold.functions.balanceOf(address_wallet).call(), 'ether')
+            token_to_buy = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+            amount_ = str(int(token_balance * 1000000000000000000))
+        json = {
+            'from': token_to_sold,
+            'fromAmount': amount_,
+            'gasOptimized': True,
+            'limit': '99',
+            'recipient': address_wallet,
+            'source': 'web',
+            'threeHop': True,
+            'to': token_to_buy,
+            '_unsafe': False
+        }
+        headers = {
+            'accept': '*/*',
+            'liquidityzone': 'nova',
+            'origin': 'https://app.slingshot.finance',
+            'referer': 'https://app.slingshot.finance/',
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36'
+        }
+    
         res = requests.post(url=url, json=json, headers=headers)
         jres = js.loads(res.text)
         txn = {
@@ -93,9 +98,9 @@ def swap_slingshot(private_key, token_to_buy, token_to_sold, amount, symbol, ret
         if token_to_sold == '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee':
             txn['value'] = Web3.to_wei(amount, 'ether')
         else:
-            allowance = check_allowance(private_key, token_to_sold, Router.slingshot_router)
+            allowance = check_allowance(private_key, web3.to_checksum_address(token_to_sold), Router.slingshot_router)
             if allowance < 10:
-                approve(private_key, token_to_sold, Router.slingshot_router, symbol)
+                approve(private_key, web3.to_checksum_address(token_to_sold), Router.slingshot_router, symbol)
                 time.sleep(25)
         signed_txn = web3.eth.account.sign_transaction(txn, private_key=private_key)
         tx_hash = web3.eth.send_raw_transaction(signed_txn.rawTransaction)
@@ -142,8 +147,8 @@ def swap_arb_buy(private_key, token_to_buy, amount, symbol, retry=0):
         ).build_transaction({
             'from': address_wallet,
             'value': web3.to_wei(amount, 'ether'),
-            'gasPrice': web3.eth.gas_price,
-            'gas': gas,
+            'maxFeePerGas': nova_maxFeePerGas,
+            'maxPriorityFeePerGas': nova_maxPriorityFeePerGas,
             'nonce': web3.eth.get_transaction_count(address_wallet)
         })
         signed_txn = web3.eth.account.sign_transaction(contract_txn, private_key=private_key)
@@ -190,8 +195,8 @@ def swap_arb_sold(private_key, token_to_sold, symbol, retry=0):
             (int(time.time()) + 100000)
         ).build_transaction({
             'from': address_wallet,
-            'gasPrice': web3.eth.gas_price,
-            'gas': gas,
+            'maxFeePerGas': nova_maxFeePerGas,
+            'maxPriorityFeePerGas': nova_maxPriorityFeePerGas,
             'nonce': web3.eth.get_transaction_count(address_wallet),
         })
         signed_txn = web3.eth.account.sign_transaction(contract_txn, private_key=private_key)
@@ -239,8 +244,8 @@ def swap_rpc_buy(private_key, token_to_buy, amount, symbol, retry=0):
         ).build_transaction({
             'from': address_wallet,
             'value': web3.to_wei(amount, 'ether'),
-            'gasPrice': web3.eth.gas_price,
-            'gas': gas,
+            'maxFeePerGas': nova_maxFeePerGas,
+            'maxPriorityFeePerGas': nova_maxPriorityFeePerGas,
             'nonce': web3.eth.get_transaction_count(address_wallet)
         })
         signed_txn = web3.eth.account.sign_transaction(contract_txn, private_key=private_key)
@@ -287,8 +292,8 @@ def swap_rpc_sold(private_key, token_to_sold, symbol, retry=0):
             (int(time.time()) + 100000)
         ).build_transaction({
             'from': address_wallet,
-            'gasPrice': web3.eth.gas_price,
-            'gas': gas,
+            'maxFeePerGas': nova_maxFeePerGas,
+            'maxPriorityFeePerGas': nova_maxPriorityFeePerGas,
             'nonce': web3.eth.get_transaction_count(address_wallet),
         })
         signed_txn = web3.eth.account.sign_transaction(contract_txn, private_key=private_key)
@@ -336,8 +341,8 @@ def swap_sushi_buy(private_key, token_to_buy, amount, symbol, retry=0):
         ).build_transaction({
             'from': address_wallet,
             'value': web3.to_wei(amount, 'ether'),
-            'gasPrice': web3.eth.gas_price,
-            'gas': gas,
+            'maxFeePerGas': nova_maxFeePerGas,
+            'maxPriorityFeePerGas': nova_maxPriorityFeePerGas,
             'nonce': web3.eth.get_transaction_count(address_wallet)
         })
         signed_txn = web3.eth.account.sign_transaction(contract_txn, private_key=private_key)
@@ -384,8 +389,8 @@ def swap_sushi_sold(private_key, token_to_sold, symbol, retry=0):
             (int(time.time()) + 10000)  # deadline
         ).build_transaction({
             'from': address_wallet,
-            'gasPrice': web3.eth.gas_price,
-            'gas': gas,
+            'maxFeePerGas': nova_maxFeePerGas,
+            'maxPriorityFeePerGas': nova_maxPriorityFeePerGas,
             'nonce': web3.eth.get_transaction_count(address_wallet)
         })
         signed_txn = web3.eth.account.sign_transaction(contract_txn, private_key=private_key)
@@ -428,8 +433,8 @@ def approve(private_key, token_to_approve, address_to_approve, symbol, retry=0):
     try:
         tx = token_contract.functions.approve(address_to_approve, max_amount).build_transaction({
             'from': address_wallet,
-            'gasPrice': web3.eth.gas_price,
-            'gas': gas,
+            'maxFeePerGas': nova_maxFeePerGas,
+            'maxPriorityFeePerGas': nova_maxPriorityFeePerGas,
             'nonce': web3.eth.get_transaction_count(address_wallet)
         })
         signed_tx = web3.eth.account.sign_transaction(tx, private_key)
@@ -491,8 +496,8 @@ def add_liquidity(private_key, token_to_buy, amount, symbol, router, retry=0):
             (int(time.time()) + 10000)
         ).build_transaction({
             'from': address_wallet,
-            'gasPrice': web3.eth.gas_price,
-            'gas': gas,
+            'maxFeePerGas': nova_maxFeePerGas,
+            'maxPriorityFeePerGas': nova_maxPriorityFeePerGas,
             'value': amount_,
             'nonce': web3.eth.get_transaction_count(address_wallet)
         })
@@ -533,13 +538,18 @@ if __name__ == '__main__':
     print('https://t.me/developercode1')
     print('https://t.me/developercode1')
     print('https://t.me/developercode1\n')
-    with open("private_keys.txt", "r") as f:
+    with open("private_keys_nova.txt", "r") as f:
         keys_list = [row.strip() for row in f]
 
     def main():
+        i = 0
         while keys_list:
             privatekey = keys_list.pop(0)
             lock.acquire()
+            i = i + 1
+            web3 = Web3(Web3.HTTPProvider(RPC))
+            my_address = web3.eth.account.from_key(privatekey).address
+            cprint(f'{i}. wallet https://nova.arbiscan.io/address/{my_address}', 'magenta')
             swaps = list(swap_arr)
             random.shuffle(swaps)
             lock.release()

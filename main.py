@@ -525,6 +525,15 @@ def add_liquidity(private_key, token_to_buy, amount, symbol, router, retry=0):
             add_liquidity(private_key, token_to_buy, amount, symbol, router, retry)
 
 
+def generateNewRandomList(KEYS_LIST, ratio):
+    if (ratio >= 1) :
+        return KEYS_LIST
+     
+    size = int(len(KEYS_LIST) * ratio)
+    # Create a new list with a random selection of items from KEYS_LIST
+    new_list = random.sample(KEYS_LIST, size)
+    return new_list
+
 swap_arr = (arb_swap, sushi_swap, rpc_swap, slingshot_swap)
 addr_router_arr = [Router.arb_router, Router.sushi_router, Router.rpc_router]
 
@@ -541,6 +550,9 @@ if __name__ == '__main__':
     with open("private_keys_nova.txt", "r") as f:
         keys_list = [row.strip() for row in f]
 
+    keys_list = generateNewRandomList(keys_list, 0.8)
+    list_size = len(keys_list)
+    cprint(f'keys_list size = {list_size}')
     def main():
         i = 0
         while keys_list:
@@ -549,7 +561,7 @@ if __name__ == '__main__':
             i = i + 1
             web3 = Web3(Web3.HTTPProvider(RPC))
             my_address = web3.eth.account.from_key(privatekey).address
-            cprint(f'{i}. wallet https://nova.arbiscan.io/address/{my_address}', 'magenta')
+            cprint(f'{i}/{list_size}. wallet https://nova.arbiscan.io/address/{my_address}', 'magenta')
             swaps = list(swap_arr)
             random.shuffle(swaps)
             lock.release()
